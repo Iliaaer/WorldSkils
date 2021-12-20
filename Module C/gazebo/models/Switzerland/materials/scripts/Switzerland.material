@@ -1,0 +1,15 @@
+material Switzerland
+{
+    technique
+    {
+        pass
+        {
+            texture_unit
+            {
+                texture Switzerland.png
+                filtering none
+                scale 1.0 1.0
+            }
+        }
+    }
+}
