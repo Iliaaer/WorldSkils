@@ -50,9 +50,22 @@ def detectFlag(image, d=0):
     return lenContours, (MaxMin[0] - MaxMin[1]) // 2 + MaxMin[1], (MaxMin[2] - MaxMin[3]) // 2 + MaxMin[3]
     
     
+img = cv.imread("3.png")
+bgr_min = np.array([0, 0, 240])    
+bgr_max = np.array([80, 80, 255])
 
-print(detectFlag(cv.imread("Canada.png")))
-print(detectFlag(cv.imread("Switzerland.png")))
-print(detectFlag(cv.imread("Japan.png")))
+mask = cv.inRange(img, bgr_min, bgr_max)
+print(sum([sum(i) for i in [i for i in mask]])/255)
+print((100 * sum([sum(i) for i in [i for i in mask]])/255) / 62500)
+img_black = cv.bitwise_not(mask)
+
+print()
+print(sum([sum(i) for i in [i for i in img_black]])/255)
+print((100 * sum([sum(i) for i in [i for i in img_black]])/255) / 62500)
+cv.imshow('1', img_black)
+cv.waitKey()
+##print(detectFlag(cv.imread("Canada.png")))
+##print(detectFlag(cv.imread("Switzerland.png")))
+##print(detectFlag(cv.imread("Japan.png")))
 
 cv.destroyAllWindows()
