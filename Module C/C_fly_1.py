@@ -19,8 +19,10 @@ get_telemetry = rospy.ServiceProxy('get_telemetry', srv.GetTelemetry)
 navigate = rospy.ServiceProxy('navigate', srv.Navigate)
 land = rospy.ServiceProxy('land', Trigger) 
 set_leds = rospy.ServiceProxy('led/set_leds', SetLEDs) 
+set_position = rospy.ServiceProxy('set_position', srv.SetPosition)
 
 nLeds = 58
+lZ = 1
 
 bridge = CvBridge()
 
@@ -53,9 +55,10 @@ def led(flag):
 
 
 def detectFlag(image, d=0):
-    bgr_min = np.array([0, 0, 240])    
+    bgr_min = np.array([0, 0, 210])    
     bgr_max = np.array([80, 80, 255])
 
+    # img = image[80: 160, 120: 200]
     mask = cv.inRange(image, bgr_min, bgr_max)
 
     contours, h = cv.findContours(mask, cv.RETR_TREE, cv.CHAIN_APPROX_SIMPLE)
@@ -87,7 +90,7 @@ def detectFlag(image, d=0):
         print(len(contours))
         print(MaxMin)
         print((MaxMin[0] - MaxMin[1]) // 2 + MaxMin[1], (MaxMin[2] - MaxMin[3]) // 2 + MaxMin[3])
-        cv.imshow('1', image)
+        cv.imshow('1', img)
         cv.waitKey()
         cv.destroyAllWindows()
     if lenContours == 0:
@@ -101,49 +104,93 @@ def detectFlag(image, d=0):
     return [lenContours, (MaxMin[0] - MaxMin[1]) // 2 + MaxMin[1], (MaxMin[2] - MaxMin[3]) // 2 + MaxMin[3]]
     
 
-def navigate_wait(x=0, y=0, z=0.5, speed=0.25, frame_id='aruco_map', auto_arm=False):
-    navigate(x=x, y=y, z=z, speed=speed, frame_id=frame_id, auto_arm=auto_arm)
+def navigate_wait(x=0, y=0, z=lZ, speed=0.5, frame_id='aruco_map', auto_arm=False):
+    navigate(x=x, y=y, z=z, speed=speed, yaw=float('nan'), frame_id=frame_id, auto_arm=auto_arm)
     
     while not rospy.is_shutdown():
         telem = get_telemetry(frame_id='navigate_target')
         if math.sqrt(telem.x ** 2 + telem.y ** 2 + telem.z ** 2) < 0.2:
             break
         rospy.sleep(0.2)
-        
-    rospy.sleep(3)
+    
+    set_position(x=x, y=y, z=z, frame_id=frame_id)
+    # rospy.sleep(3)
 
-led('japan')
+def go(x, y):
+    global detect_count 
+    global count
+    navigate_wait(x=x, y=y)
+    set_position(x=x, y=y, z=lZ, frame_id="aruco_map")
+    rospy.sleep(1)
+    image = bridge.imgmsg_to_cv2(rospy.wait_for_message('main_camera/image_raw', Image), 'bgr8')
+    img = image.copy()[80: 180, 120: 220]
+    
+    
+    # cv.imwrite("flag" + str(count) + ".png", img)
+    detect = detectFlag(img)
+    # cv.imwrite("flag" + str(count) + "detect.png", img)
+    
+    
+    print(detect)
+    led(detect[0])
+    detect_count.append([detect[0], x, y])
+    count += 1
 
-navigate_wait(z=1, frame_id='body', auto_arm=True)
-navigate_wait(z=0.5)
+
+# led('japan')
+
+navigate_wait(frame_id='body', auto_arm=True)
+set_position(x=0, y=0, z=lZ, frame_id="aruco_map")
+
 count = 0
 n = 4
 detect_count = []
 
-for i in range(1, n+1):
+go(0.5, 2)
+
+go(1.5, 0)
+
+go(2.5, 1)
+
+'''
+for i in range(n*2):
     if count == 3:
         break
-    for j in range(n+1):
+    for j in range((n-1)*2):
         if count == 3:
             break
-        navigate_wait(x=j*0.75, y=i*0.5)
         
+        if i % 2 == 0:
+            print(j*0.5, i)
+            navigate_wait(x=j*0.5, y=i)
+            set_position(x=j*0.5, y=i, z=0.5, frame_id="aruco_map")
+        else:
+            print(n-j*0.5, i)
+            navigate_wait(x=(n-1)-j*0.5, y=i)
+            set_position(x=(n-1)-j*0.5, y=i, z=0.5, frame_id="aruco_map")
         img = bridge.imgmsg_to_cv2(rospy.wait_for_message('main_camera/image_raw', Image), 'bgr8')
         detect = detectFlag(img)
         print(detect)
         if len(detect) > 1:
-            count += 1
-            cv.imwrite(detect[0] + str(count) + ".png", img)
-            led(detect[0])
-            detect_count.append([detect[0], j, i*0.5])
-            
+            if detect[0] not in[element[0] for element in detect_count]:
+                count += 1
+                #cv.imwrite(detect[0] + str(count) + ".png", img)
+                led(detect[0])
+                detect_count.append([detect[0], j, i*0.5])
+'''            
         
 
 
 navigate_wait()
+set_position(x=0, y=0, z=0.5, frame_id="aruco_map")
 land()
 
-with open('С_report_fly.txt', 'w') as f:
+print("="*20)
+for i in detect_count:
+    print(i)
+print("="*20)
+
+with open('C_report_fly.txt', 'w') as f:
     for d in detect_count:
         f.write("{} ({}, {})\n".format(*d))
 
